@@ -3,6 +3,7 @@ const router = express.Router();
 
 const pool = require('../services/db');
 const materialsRoutes = require('./materials');
+const transactionsRoutes = require('./transactions');
 
 router.get('/health', (req, res) => {
   res.json({ status: 'ok' });
@@ -113,5 +114,6 @@ router.get('/metrics/overview', async (req, res) => {
 });
 
 router.use('/materials', materialsRoutes);
+router.use('/transactions', transactionsRoutes);
 
 module.exports = router;

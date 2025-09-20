@@ -102,11 +102,12 @@ router.post('/create', authenticateToken, async (req, res) => {
     // Create Fapshi payment request (triggers MoMo prompt on phone)
     const fapshiResponse = await fapshiService.createPayment({
       amount: parseFloat(amount),
-      currency: currency || 'XAF',
       phone: phone,
+      customerName: req.user.name || 'Student',
+      email: req.user.email || 'student@example.com',
+      userId: userId.toString(),
       description: `Course enrollment payment - ${reference}`,
-      reference: reference,
-      returnUrl: `${process.env.FRONTEND_URL || 'http://localhost:5173'}/payment/success?ref=${reference}`
+      reference: reference
     });
 
     if (!fapshiResponse.success) {

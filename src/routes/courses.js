@@ -8,7 +8,7 @@ const router = express.Router();
 router.get('/', async (req, res) => {
   try {
     const result = await pool.query(
-      'SELECT id, title, description, price_amount, price_currency, capacity, created_at, created_by FROM courses ORDER BY created_at DESC'
+      'SELECT id, title, description, price_amount, price_currency, capacity, created_at, created_by, payment_link FROM courses ORDER BY created_at DESC'
     );
     res.json({ courses: result.rows });
   } catch (error) {
@@ -136,14 +136,14 @@ router.post('/:courseId/classes/:classId/cancel', async (req, res) => {
 // Create course
 router.post('/', async (req, res) => {
   try {
-    const { title, code, duration, tutors, cost, levels, imageUrl } = req.body;
+    const { title, code, duration, tutors, cost, levels, imageUrl, paymentLink } = req.body;
     if (!title) {
       return res.status(400).json({ error: 'Title is required' });
     }
 
     const priceAmount = cost && parseFloat(String(cost).replace(/[^0-9.]/g, '')) || 0;
 
-    const meta = `Code: ${code || ''}; Duration: ${duration || ''}; Tutors: ${tutors || ''}; Levels: ${(levels||[]).join(', ')}; Image: ${imageUrl || ''}`;
+    const meta = `Code: ${code || ''}; Duration: ${duration || ''}; Tutors: ${tutors || ''}; Levels: ${(levels||[]).join(', ')}; Image: ${imageUrl || ''}; PaymentLink: ${paymentLink || ''}`;
 
     let createdBy = null;
     try {
@@ -157,8 +157,8 @@ router.post('/', async (req, res) => {
       }
     } catch (e) { /* ignore token errors; createdBy stays null */ }
     const insert = await pool.query(
-      'INSERT INTO courses (title, description, price_amount, price_currency, capacity, created_by) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, title, description, price_amount, price_currency, capacity, created_at, created_by',
-      [title, meta, priceAmount, 'XAF', null, createdBy]
+      'INSERT INTO courses (title, description, price_amount, price_currency, capacity, created_by, payment_link) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, title, description, price_amount, price_currency, capacity, created_at, created_by, payment_link',
+      [title, meta, priceAmount, 'XAF', null, createdBy, paymentLink]
     );
 
     res.status(201).json({ message: 'Course created successfully', course: insert.rows[0] });
@@ -172,7 +172,7 @@ router.post('/', async (req, res) => {
 router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { title, description, price_amount, price_currency } = req.body;
+    const { title, description, price_amount, price_currency, paymentLink } = req.body;
     const fields = [];
     const values = [];
     let idx = 1;
@@ -180,9 +180,10 @@ router.put('/:id', async (req, res) => {
     if (description !== undefined) { fields.push(`description = $${idx++}`); values.push(description); }
     if (price_amount !== undefined) { fields.push(`price_amount = $${idx++}`); values.push(price_amount); }
     if (price_currency !== undefined) { fields.push(`price_currency = $${idx++}`); values.push(price_currency); }
+    if (paymentLink !== undefined) { fields.push(`payment_link = $${idx++}`); values.push(paymentLink); }
     if (fields.length === 0) return res.status(400).json({ error: 'No fields to update' });
     values.push(id);
-    const sql = `UPDATE courses SET ${fields.join(', ')} WHERE id = $${idx} RETURNING id, title, description, price_amount, price_currency, capacity, created_at`;
+    const sql = `UPDATE courses SET ${fields.join(', ')} WHERE id = $${idx} RETURNING id, title, description, price_amount, price_currency, capacity, created_at, payment_link`;
     const result = await pool.query(sql, values);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Not found' });
     res.json({ message: 'Course updated', course: result.rows[0] });
