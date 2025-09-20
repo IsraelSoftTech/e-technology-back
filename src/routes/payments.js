@@ -1,13 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const fapshiService = require('../services/fapshi');
-const { Pool } = require('pg');
+const pool = require('../services/db');
 const { authenticateToken } = require('./middleware');
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgres://postgres:Israel67564@localhost:5432/e_tech',
-  ssl: false,
-});
 
 /**
  * Create a payment request
@@ -38,10 +33,29 @@ router.post('/create', authenticateToken, async (req, res) => {
     }
 
     // Check if user is already enrolled (only active enrollments)
-    const enrollmentCheck = await pool.query(
-      'SELECT id FROM enrollments WHERE course_id = $1 AND student_id = $2 AND status = $3',
-      [courseId, userId, 'active']
-    );
+    let enrollmentCheck;
+    try {
+      enrollmentCheck = await pool.query(
+        'SELECT id FROM enrollments WHERE course_id = $1 AND student_id = $2 AND status = $3',
+        [courseId, userId, 'active']
+      );
+    } catch (dbError) {
+      console.error('Database error during enrollment check:', dbError);
+      if (dbError.code === 'ECONNRESET' || dbError.code === 'ECONNREFUSED') {
+        // Retry once
+        try {
+          enrollmentCheck = await pool.query(
+            'SELECT id FROM enrollments WHERE course_id = $1 AND student_id = $2 AND status = $3',
+            [courseId, userId, 'active']
+          );
+        } catch (retryError) {
+          console.error('Database retry failed:', retryError);
+          throw retryError;
+        }
+      } else {
+        throw dbError;
+      }
+    }
 
     console.log('Enrollment check result:', enrollmentCheck.rows);
 

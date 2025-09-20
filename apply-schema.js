@@ -6,10 +6,22 @@ const dotenv = require('dotenv');
 dotenv.config();
 
 async function main() {
-  const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-    ssl: process.env.PGSSL === 'true' ? { rejectUnauthorized: false } : undefined,
-  });
+  // Default database URL if not set in environment
+  const defaultDatabaseUrl = 'postgres://postgres:Israel67564@localhost:5432/e_tech';
+  const databaseUrl = process.env.DATABASE_URL || defaultDatabaseUrl;
+
+  // Parse the connection string to ensure password is a string
+  const url = new URL(databaseUrl);
+  const config = {
+    host: url.hostname,
+    port: parseInt(url.port) || 5432,
+    database: url.pathname.slice(1), // Remove leading slash
+    user: url.username,
+    password: String(url.password || ''), // Ensure password is a string
+    ssl: process.env.PGSSL === 'true' ? { rejectUnauthorized: false } : false,
+  };
+
+  const pool = new Pool(config);
 
   try {
     const sqlPath = path.join(__dirname, 'src', 'services', 'schema.sql');
