@@ -1,6 +1,7 @@
 const express = require('express');
 const pool = require('../services/db');
 const jwt = require('jsonwebtoken');
+const { logActivity } = require('../services/activity');
 
 const router = express.Router();
 
@@ -53,6 +54,26 @@ router.get('/:id/classes', async (req, res) => {
   }
 });
 
+// List all classes (admin view)
+router.get('/classes/all', async (_req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT cl.id, cl.course_id, cl.teacher_id, cl.start_time, cl.end_time, cl.meet_link, cl.status, cl.objective, cl.created_at,
+              c.title as course_title,
+              u.name as teacher_name
+         FROM classes cl
+         LEFT JOIN courses c ON c.id = cl.course_id
+         LEFT JOIN users u ON u.id = cl.teacher_id
+        WHERE cl.status = 'scheduled'
+        ORDER BY cl.start_time DESC NULLS LAST, cl.created_at DESC`
+    );
+    res.json({ classes: result.rows });
+  } catch (error) {
+    console.error('List all classes error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // Create class for a course
 router.post('/:id/classes', async (req, res) => {
   try {
@@ -83,6 +104,14 @@ router.post('/:id/classes', async (req, res) => {
         );
         created = upd.rows[0];
       }
+      await logActivity({
+        actorId: teacherId,
+        actorRole: 'teacher',
+        action: 'schedule_class',
+        entityType: 'class',
+        entityId: String(created.id),
+        details: { course_id: id, start_time, end_time, objective }
+      });
       return res.status(201).json({ message: 'Class scheduled', class: created });
     } catch (e) {
       // Fallback if objective column is missing in DB
@@ -117,7 +146,7 @@ router.post('/:id/classes', async (req, res) => {
   }
 });
 
-// Cancel a class (teacher)
+// Cancel a class (teacher or admin)
 router.post('/:courseId/classes/:classId/cancel', async (req, res) => {
   try {
     const { classId } = req.params;
@@ -126,6 +155,11 @@ router.post('/:courseId/classes/:classId/cancel', async (req, res) => {
       [classId]
     );
     if (result.rows.length === 0) return res.status(404).json({ error: 'Class not found' });
+    try {
+      const actorId = (req.user && (req.user.id || req.user.userId)) ? String(req.user.id || req.user.userId) : null;
+      const actorRole = (req.user && req.user.role) ? req.user.role : null;
+      await logActivity({ actorId, actorRole, action: 'cancel_class', entityType: 'class', entityId: String(classId), details: {} });
+    } catch {}
     res.json({ message: 'Class cancelled', class: result.rows[0] });
   } catch (error) {
     console.error('Cancel class error:', error);

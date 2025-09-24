@@ -57,6 +57,23 @@ router.get('/my/list', async (req, res) => {
   }
 });
 
+// Delete my application (only if not approved)
+router.delete('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.query.userId; // In real app, derive from token
+    if (!userId) return res.status(400).json({ error: 'userId required' });
+    // Ensure application belongs to user and not approved yet
+    const r = await pool.query('SELECT id FROM teacher_docs WHERE id = $1 AND user_id = $2 AND review_status <> $3', [id, userId, 'approved']);
+    if (r.rows.length === 0) return res.status(404).json({ error: 'Not found or already approved' });
+    await pool.query('DELETE FROM teacher_docs WHERE id = $1', [id]);
+    res.json({ message: 'Application deleted' });
+  } catch (error) {
+    console.error('Delete teacher application error:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 // List applications (admin)
 router.get('/applications', async (req, res) => {
   try {
@@ -87,7 +104,11 @@ router.post('/:id/approve', async (req, res) => {
         return res.status(404).json({ error: 'Not found' });
       }
       const userId = update.rows[0].user_id;
-      await client.query("UPDATE users SET role = 'teacher', status = 'active' WHERE id = $1", [userId]);
+      // Only promote to teacher if fee is approved as well
+      const fee = await client.query("SELECT 1 FROM teacher_fees WHERE user_id = $1 AND status = 'success' LIMIT 1", [userId]);
+      if (fee.rows.length > 0) {
+        await client.query("UPDATE users SET role = 'teacher', status = 'active' WHERE id = $1", [userId]);
+      }
       await client.query('COMMIT');
       res.json({ message: 'Application approved' });
     } catch (e) {

@@ -7,13 +7,15 @@ const router = express.Router();
 router.get('/my', async (req, res) => {
   try {
     const userId = req.query.userId;
+    const all = String(req.query.all || '').toLowerCase() === 'true';
     if (!userId) return res.status(400).json({ error: 'userId required' });
+    const where = all ? 'e.student_id = $1' : "e.student_id = $1 AND e.status = 'active'";
     const result = await pool.query(
       `SELECT e.id as enrollment_id, e.status, e.enrolled_at,
               c.id as course_id, c.title, c.description, c.price_amount, c.price_currency
          FROM enrollments e
          JOIN courses c ON c.id = e.course_id
-        WHERE e.student_id = $1
+        WHERE ${where}
         ORDER BY e.enrolled_at DESC`,
       [userId]
     );

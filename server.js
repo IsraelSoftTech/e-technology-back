@@ -25,6 +25,7 @@ const teachersRoutes = require('./src/routes/teachers');
 const enrollmentsRoutes = require('./src/routes/enrollments');
 const usersRoutes = require('./src/routes/users');
 const paymentsRoutes = require('./src/routes/payments');
+const settingsRoutes = require('./src/routes/settings');
 const { attachUserOptional } = require('./src/routes/middleware');
 
 app.use('/api', routes);
@@ -34,6 +35,7 @@ app.use('/api/teachers', teachersRoutes);
 app.use('/api/enrollments', enrollmentsRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/payments', paymentsRoutes);
+app.use('/api/settings', settingsRoutes);
 
 const PORT = process.env.PORT || 4000;
 

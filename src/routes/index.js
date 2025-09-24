@@ -4,6 +4,7 @@ const router = express.Router();
 const pool = require('../services/db');
 const materialsRoutes = require('./materials');
 const transactionsRoutes = require('./transactions');
+const activityRoutes = require('./logs');
 
 router.get('/health', (req, res) => {
   res.json({ status: 'ok' });
@@ -80,11 +81,57 @@ router.get('/metrics/classes/count', async (req, res) => {
   }
 });
 
+// Scheduled classes count
+router.get('/metrics/classes/scheduled-count', async (req, res) => {
+  try {
+    const result = await pool.query("SELECT COUNT(*)::int AS count FROM classes WHERE status = 'scheduled'");
+    res.json({ count: result.rows[0].count });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Ongoing classes count (started and not cancelled, and not ended)
+router.get('/metrics/classes/ongoing', async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT COUNT(*)::int AS count
+         FROM classes
+        WHERE status <> 'cancelled'
+          AND start_time <= NOW()
+          AND (end_time IS NULL OR end_time > NOW())`
+    );
+    res.json({ count: result.rows[0].count });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Transactions count
 router.get('/metrics/transactions/count', async (req, res) => {
   try {
-    const result = await pool.query('SELECT COUNT(*)::int AS count FROM payments WHERE status = "success"');
+    const result = await pool.query("SELECT COUNT(*)::int AS count FROM payments WHERE status = 'success'");
     res.json({ count: result.rows[0].count });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Active transactions count (approved enrollments)
+router.get('/metrics/transactions/active-count', async (req, res) => {
+  try {
+    const result = await pool.query("SELECT COUNT(*)::int AS count FROM enrollments WHERE status = 'active'");
+    res.json({ count: result.rows[0].count });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Confirmed transaction total amount (sum of enrollments with status 'active')
+router.get('/metrics/transactions/confirmed-amount', async (req, res) => {
+  try {
+    const result = await pool.query("SELECT COALESCE(SUM(amount), 0)::numeric AS amount FROM enrollments WHERE status = 'active'");
+    res.json({ amount: result.rows[0].amount });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -115,5 +162,6 @@ router.get('/metrics/overview', async (req, res) => {
 
 router.use('/materials', materialsRoutes);
 router.use('/transactions', transactionsRoutes);
+router.use('/logs', activityRoutes);
 
 module.exports = router;
